@@ -2,25 +2,25 @@ import SwiftUI
 
 struct CompetitionsView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var localization: LocalizationManager
 
     var body: some View {
         NavigationStack {
             if appState.selectedCompetitionIds.isEmpty {
                 EmptyStateView(
                     icon: "trophy",
-                    title: "未选择赛事",
-                    message: "请在球队页面的设置中添加要关注的赛事"
+                    title: L10n.noCompetitionsSelected,
+                    message: L10n.noCompetitionsMessage
                 )
-                .navigationTitle("赛事")
+                .navigationTitle(L10n.competitions)
             } else {
                 List {
                     ForEach(appState.selectedCompetitionIds, id: \.self) { compId in
-                        let name = appState.selectedCompetitionNames[compId] ?? "赛事"
+                        let name = appState.selectedCompetitionNames[compId] ?? L10n.competitions
+                        let emblem = appState.selectedCompetitionEmblems[compId]
                         NavigationLink(destination: CompetitionDetailView(competitionId: compId, competitionName: name)) {
                             HStack(spacing: 12) {
-                                Image(systemName: "trophy.fill")
-                                    .foregroundStyle(.orange)
-                                    .frame(width: 30)
+                                CrestImage(emblem, size: 30)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(name)
                                         .font(.headline)
@@ -31,7 +31,7 @@ struct CompetitionsView: View {
                     }
                 }
                 .listStyle(.plain)
-                .navigationTitle("赛事")
+                .navigationTitle(L10n.competitions)
             }
         }
     }
@@ -52,16 +52,16 @@ struct CompetitionDetailView: View {
 
         var title: String {
             switch self {
-            case .standings: return "积分榜"
-            case .scorers: return "射手榜"
-            case .assists: return "助攻榜"
+            case .standings: return L10n.standings
+            case .scorers: return L10n.topScorers
+            case .assists: return L10n.topAssists
             }
         }
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("选项", selection: $selectedTab) {
+            Picker(L10n.options, selection: $selectedTab) {
                 ForEach(CompTab.allCases, id: \.self) { tab in
                     Text(tab.title).tag(tab)
                 }
@@ -96,13 +96,13 @@ struct StandingsView: View {
     var body: some View {
         Group {
             if isLoading {
-                LoadingView("加载积分榜...")
+                LoadingView(L10n.loadingStandings)
             } else if let error = errorMessage {
                 ErrorView(message: error) {
                     Task { await loadStandings() }
                 }
             } else if standings.isEmpty {
-                EmptyStateView(icon: "list.number", title: "暂无数据", message: "该赛事暂无积分榜数据")
+                EmptyStateView(icon: "list.number", title: L10n.noData, message: L10n.noStandingsData)
             } else {
                 standingsContent
             }
@@ -122,10 +122,10 @@ struct StandingsView: View {
         VStack(spacing: 0) {
             // Type selector (TOTAL/HOME/AWAY) if multiple types
             if standings.count > 1 && standings.contains(where: { $0.group == nil }) {
-                Picker("类型", selection: $selectedType) {
-                    Text("总榜").tag("TOTAL")
-                    Text("主场").tag("HOME")
-                    Text("客场").tag("AWAY")
+                Picker(L10n.type, selection: $selectedType) {
+                    Text(L10n.standingTotal).tag("TOTAL")
+                    Text(L10n.standingHome).tag("HOME")
+                    Text(L10n.standingAway).tag("AWAY")
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
@@ -165,20 +165,20 @@ struct StandingsView: View {
         HStack(spacing: 0) {
             Text("#")
                 .frame(width: 24, alignment: .center)
-            Text("球队")
+            Text(L10n.team)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 8)
-            Text("赛")
+            Text(L10n.played)
                 .frame(width: 28)
-            Text("胜")
+            Text(L10n.won)
                 .frame(width: 28)
-            Text("平")
+            Text(L10n.draw)
                 .frame(width: 28)
-            Text("负")
+            Text(L10n.lost)
                 .frame(width: 28)
-            Text("净胜")
+            Text(L10n.goalDiff)
                 .frame(width: 34)
-            Text("积分")
+            Text(L10n.points)
                 .frame(width: 34)
                 .fontWeight(.semibold)
         }
@@ -262,7 +262,7 @@ struct ScorersListView: View {
     var body: some View {
         Group {
             if isLoading {
-                LoadingView(showAssists ? "加载助攻榜..." : "加载射手榜...")
+                LoadingView(showAssists ? L10n.loadingAssists : L10n.loadingScorers)
             } else if let error = errorMessage {
                 ErrorView(message: error) {
                     Task { await loadScorers() }
@@ -270,8 +270,8 @@ struct ScorersListView: View {
             } else if sortedScorers.isEmpty {
                 EmptyStateView(
                     icon: showAssists ? "hand.point.up" : "soccerball",
-                    title: "暂无数据",
-                    message: showAssists ? "该赛事暂无助攻数据" : "该赛事暂无射手数据"
+                    title: L10n.noData,
+                    message: showAssists ? L10n.noAssistsData : L10n.noScorersData
                 )
             } else {
                 List {
@@ -305,21 +305,21 @@ struct ScorersListView: View {
         HStack(spacing: 0) {
             Text("#")
                 .frame(width: 28, alignment: .center)
-            Text("球员")
+            Text(L10n.player)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text("球队")
+            Text(L10n.team)
                 .frame(width: 50)
-            Text("场次")
+            Text(L10n.matchesPlayed)
                 .frame(width: 36)
             if showAssists {
-                Text("助攻")
+                Text(L10n.assists)
                     .frame(width: 36)
                     .fontWeight(.semibold)
             } else {
-                Text("进球")
+                Text(L10n.goals)
                     .frame(width: 36)
                     .fontWeight(.semibold)
-                Text("助攻")
+                Text(L10n.assists)
                     .frame(width: 36)
             }
         }

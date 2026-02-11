@@ -48,7 +48,7 @@ struct CrestImage: View {
 struct LoadingView: View {
     let message: String
 
-    init(_ message: String = "加载中...") {
+    init(_ message: String = "") {
         self.message = message
     }
 
@@ -56,7 +56,7 @@ struct LoadingView: View {
         VStack(spacing: 12) {
             ProgressView()
                 .scaleEffect(1.2)
-            Text(message)
+            Text(message.isEmpty ? L10n.loading : message)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -80,7 +80,7 @@ struct ErrorView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             if let retryAction {
-                Button("重试") {
+                Button(L10n.retry) {
                     retryAction()
                 }
                 .buttonStyle(.bordered)

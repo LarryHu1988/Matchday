@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ScheduleView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var localization: LocalizationManager
     @State private var matches: [Match] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -14,9 +15,9 @@ struct ScheduleView: View {
 
         var title: String {
             switch self {
-            case .upcoming: return "未来赛程"
-            case .results: return "已完赛"
-            case .all: return "全部"
+            case .upcoming: return L10n.scheduleUpcoming
+            case .results: return L10n.scheduleResults
+            case .all: return L10n.scheduleAll
             }
         }
     }
@@ -25,7 +26,7 @@ struct ScheduleView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Filter picker
-                Picker("筛选", selection: $selectedFilter) {
+                Picker(L10n.filter, selection: $selectedFilter) {
                     ForEach(ScheduleFilter.allCases, id: \.self) { filter in
                         Text(filter.title).tag(filter)
                     }
@@ -35,7 +36,7 @@ struct ScheduleView: View {
                 .padding(.vertical, 8)
 
                 if isLoading {
-                    LoadingView("加载赛程中...")
+                    LoadingView(L10n.loadingSchedule)
                 } else if let error = errorMessage {
                     ErrorView(message: error) {
                         Task { await loadMatches() }
@@ -43,14 +44,14 @@ struct ScheduleView: View {
                 } else if filteredMatches.isEmpty {
                     EmptyStateView(
                         icon: "sportscourt",
-                        title: "暂无赛程",
-                        message: "所选球队或赛事暂无比赛安排"
+                        title: L10n.noSchedule,
+                        message: L10n.noScheduleMessage
                     )
                 } else {
                     matchList
                 }
             }
-            .navigationTitle("赛程")
+            .navigationTitle(L10n.schedule)
             .refreshable {
                 await loadMatches()
             }
@@ -163,7 +164,7 @@ struct MatchRow: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                     if let matchday = match.matchday {
-                        Text("第\(matchday)轮")
+                        Text(L10n.matchdayRound(matchday))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -175,7 +176,7 @@ struct MatchRow: View {
                 // Home team
                 HStack(spacing: 8) {
                     Spacer()
-                    Text(match.homeTeam.shortName ?? match.homeTeam.name ?? "主队")
+                    Text(match.homeTeam.shortName ?? match.homeTeam.name ?? L10n.homeTeam)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .lineLimit(1)
@@ -204,7 +205,7 @@ struct MatchRow: View {
                 // Away team
                 HStack(spacing: 8) {
                     CrestImage(match.awayTeam.crest, size: 24)
-                    Text(match.awayTeam.shortName ?? match.awayTeam.name ?? "客队")
+                    Text(match.awayTeam.shortName ?? match.awayTeam.name ?? L10n.awayTeam)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .lineLimit(1)

@@ -151,12 +151,12 @@ enum APIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidResponse: return "无效的服务器响应"
-        case .rateLimited: return "请求过于频繁，请稍后再试"
-        case .unauthorized: return "API密钥无效，请在设置中配置"
-        case .notFound: return "未找到请求的资源"
-        case .serverError(let code): return "服务器错误 (\(code))"
-        case .decodingError(let error): return "数据解析错误: \(error.localizedDescription)"
+        case .invalidResponse: return L10n.errorInvalidResponse
+        case .rateLimited: return L10n.errorRateLimited
+        case .unauthorized: return L10n.errorUnauthorized
+        case .notFound: return L10n.errorNotFound
+        case .serverError(let code): return L10n.errorServer(code)
+        case .decodingError(let error): return L10n.errorDecoding(error.localizedDescription)
         }
     }
 }

@@ -20,12 +20,12 @@ struct StandingGroup: Codable, Identifiable {
 
     var groupName: String {
         if let group = group {
-            return group.replacingOccurrences(of: "GROUP_", with: "小组 ")
+            return group.replacingOccurrences(of: "GROUP_", with: L10n.standingGroupPrefix)
         }
         switch type {
-        case "TOTAL": return "总榜"
-        case "HOME": return "主场"
-        case "AWAY": return "客场"
+        case "TOTAL": return L10n.standingTotal
+        case "HOME": return L10n.standingHome
+        case "AWAY": return L10n.standingAway
         default: return type ?? ""
         }
     }

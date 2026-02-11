@@ -2,32 +2,53 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var localization: LocalizationManager
     @State private var showAddSheet = false
     @State private var apiKeyInput = ""
 
     var body: some View {
         List {
+            // Language
+            Section(L10n.language) {
+                ForEach(AppLanguage.allCases, id: \.self) { lang in
+                    HStack {
+                        Text(lang.displayName)
+                            .font(.subheadline)
+                        Spacer()
+                        if localization.language == lang {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.green)
+                                .fontWeight(.semibold)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        localization.language = lang
+                    }
+                }
+            }
+
             // API Key
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("API Key")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    TextField("输入Football-Data.org API Key", text: $apiKeyInput)
+                    TextField(L10n.enterApiKey, text: $apiKeyInput)
                         .textFieldStyle(.roundedBorder)
                         .font(.caption)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
-                    Text("在 football-data.org 免费注册获取")
+                    Text(L10n.apiKeyHint)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 4)
             } header: {
-                Text("API 配置")
+                Text(L10n.apiConfig)
             } footer: {
                 if !apiKeyInput.isEmpty {
-                    Button("保存") {
+                    Button(L10n.save) {
                         appState.apiKey = apiKeyInput
                     }
                     .font(.subheadline)
@@ -35,17 +56,16 @@ struct SettingsView: View {
             }
 
             // Selected Teams
-            Section("已选球队 (\(appState.selectedTeamIds.count))") {
+            Section(L10n.selectedTeamsSection(appState.selectedTeamIds.count)) {
                 if appState.selectedTeamIds.isEmpty {
-                    Text("未选择球队")
+                    Text(L10n.noTeamsSelectedShort)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(appState.selectedTeamIds, id: \.self) { teamId in
                         HStack {
-                            Image(systemName: "shield.fill")
-                                .foregroundStyle(.green)
-                            Text(appState.selectedTeamNames[teamId] ?? "球队 #\(teamId)")
+                            CrestImage(appState.selectedTeamCrests[teamId], size: 22)
+                            Text(appState.selectedTeamNames[teamId] ?? L10n.teamFallback(teamId))
                                 .font(.subheadline)
                             Spacer()
                             Button {
@@ -60,17 +80,16 @@ struct SettingsView: View {
             }
 
             // Selected Competitions
-            Section("已选赛事 (\(appState.selectedCompetitionIds.count))") {
+            Section(L10n.selectedCompetitionsSection(appState.selectedCompetitionIds.count)) {
                 if appState.selectedCompetitionIds.isEmpty {
-                    Text("未选择赛事")
+                    Text(L10n.noCompetitionsSelectedShort)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(appState.selectedCompetitionIds, id: \.self) { compId in
                         HStack {
-                            Image(systemName: "trophy.fill")
-                                .foregroundStyle(.orange)
-                            Text(appState.selectedCompetitionNames[compId] ?? "赛事 #\(compId)")
+                            CrestImage(appState.selectedCompetitionEmblems[compId], size: 22)
+                            Text(appState.selectedCompetitionNames[compId] ?? L10n.competitionFallback(compId))
                                 .font(.subheadline)
                             Spacer()
                             Button {
@@ -92,9 +111,9 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Image(systemName: "plus.circle.fill")
-                            Text("添加球队或赛事")
+                            Text(L10n.addTeamOrCompetition)
                             Spacer()
-                            Text("还可选 \(appState.remainingSlots) 个")
+                            Text(L10n.remainingSlots(appState.remainingSlots))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -105,14 +124,14 @@ struct SettingsView: View {
             // Selection count
             Section {
                 HStack {
-                    Text("已选择")
+                    Text(L10n.selected)
                     Spacer()
                     Text("\(appState.totalSelections) / 10")
                         .fontWeight(.semibold)
                         .foregroundStyle(appState.totalSelections >= 10 ? .red : .green)
                 }
             } footer: {
-                Text("最多可选择 10 个球队和赛事")
+                Text(L10n.maxSelections)
             }
 
             // Reset
@@ -122,13 +141,13 @@ struct SettingsView: View {
                 } label: {
                     HStack {
                         Image(systemName: "arrow.counterclockwise")
-                        Text("重置所有选择")
+                        Text(L10n.resetAll)
                     }
                 }
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("设置")
+        .navigationTitle(L10n.settings)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showAddSheet) {
             AddSelectionSheet()
@@ -158,8 +177,8 @@ struct AddSelectionSheet: View {
 
         var title: String {
             switch self {
-            case .competition: return "赛事"
-            case .team: return "球队"
+            case .competition: return L10n.competitionMode
+            case .team: return L10n.teamMode
             }
         }
     }
@@ -167,7 +186,7 @@ struct AddSelectionSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("类型", selection: $mode) {
+                Picker(L10n.type, selection: $mode) {
                     ForEach(AddMode.allCases, id: \.self) { m in
                         Text(m.title).tag(m)
                     }
@@ -182,11 +201,11 @@ struct AddSelectionSheet: View {
                     teamsSelection
                 }
             }
-            .navigationTitle("添加关注")
+            .navigationTitle(L10n.addFollowing)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") { dismiss() }
+                    Button(L10n.done) { dismiss() }
                 }
             }
         }
@@ -197,7 +216,7 @@ struct AddSelectionSheet: View {
     private var competitionsList: some View {
         Group {
             if isLoadingCompetitions {
-                LoadingView("加载赛事列表...")
+                LoadingView(L10n.loadingCompetitions)
             } else {
                 List {
                     ForEach(filteredCompetitions) { comp in
@@ -218,7 +237,7 @@ struct AddSelectionSheet: View {
                                     .foregroundStyle(.green)
                             } else if appState.canAddMore {
                                 Button {
-                                    appState.addCompetition(id: comp.id, name: comp.name)
+                                    appState.addCompetition(id: comp.id, name: comp.name, emblem: comp.emblem)
                                 } label: {
                                     Image(systemName: "plus.circle")
                                         .foregroundStyle(.blue)
@@ -229,7 +248,7 @@ struct AddSelectionSheet: View {
                     }
                 }
                 .listStyle(.plain)
-                .searchable(text: $searchText, prompt: "搜索赛事")
+                .searchable(text: $searchText, prompt: L10n.searchCompetitions)
             }
         }
         .task {
@@ -253,7 +272,7 @@ struct AddSelectionSheet: View {
         VStack(spacing: 0) {
             if selectedCompetitionForTeams == nil {
                 // Step 1: Pick a competition to browse teams from
-                Text("先选择一个赛事来浏览球队")
+                Text(L10n.selectCompetitionFirst)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding()
@@ -291,7 +310,7 @@ struct AddSelectionSheet: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "chevron.left")
-                            Text("返回")
+                            Text(L10n.back)
                         }
                         .font(.subheadline)
                     }
@@ -305,7 +324,7 @@ struct AddSelectionSheet: View {
                 .padding(.vertical, 8)
 
                 if isLoadingTeams {
-                    LoadingView("加载球队列表...")
+                    LoadingView(L10n.loadingTeams)
                 } else {
                     List {
                         ForEach(filteredTeams) { team in
@@ -326,7 +345,7 @@ struct AddSelectionSheet: View {
                                         .foregroundStyle(.green)
                                 } else if appState.canAddMore {
                                     Button {
-                                        appState.addTeam(id: team.id, name: team.shortName ?? team.name)
+                                        appState.addTeam(id: team.id, name: team.shortName ?? team.name, crest: team.crest)
                                     } label: {
                                         Image(systemName: "plus.circle")
                                             .foregroundStyle(.blue)
@@ -337,7 +356,7 @@ struct AddSelectionSheet: View {
                         }
                     }
                     .listStyle(.plain)
-                    .searchable(text: $searchText, prompt: "搜索球队")
+                    .searchable(text: $searchText, prompt: L10n.searchTeams)
                 }
             }
         }

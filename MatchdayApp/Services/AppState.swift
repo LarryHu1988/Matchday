@@ -26,6 +26,8 @@ class AppState: ObservableObject {
     // MARK: - Selection Info (for display)
     @Published var selectedTeamNames: [Int: String] = [:]
     @Published var selectedCompetitionNames: [Int: String] = [:]
+    @Published var selectedTeamCrests: [Int: String] = [:]
+    @Published var selectedCompetitionEmblems: [Int: String] = [:]
 
     var totalSelections: Int {
         selectedTeamIds.count + selectedCompetitionIds.count
@@ -53,12 +55,18 @@ class AppState: ObservableObject {
         UserDefaults.standard.set(selectedTeamIds, forKey: "selectedTeamIds")
         UserDefaults.standard.set(selectedCompetitionIds, forKey: "selectedCompetitionIds")
 
-        // Save names
+        // Save names and image URLs
         if let data = try? JSONEncoder().encode(selectedTeamNames) {
             UserDefaults.standard.set(data, forKey: "selectedTeamNames")
         }
         if let data = try? JSONEncoder().encode(selectedCompetitionNames) {
             UserDefaults.standard.set(data, forKey: "selectedCompetitionNames")
+        }
+        if let data = try? JSONEncoder().encode(selectedTeamCrests) {
+            UserDefaults.standard.set(data, forKey: "selectedTeamCrests")
+        }
+        if let data = try? JSONEncoder().encode(selectedCompetitionEmblems) {
+            UserDefaults.standard.set(data, forKey: "selectedCompetitionEmblems")
         }
     }
 
@@ -74,30 +82,42 @@ class AppState: ObservableObject {
            let names = try? JSONDecoder().decode([Int: String].self, from: data) {
             selectedCompetitionNames = names
         }
+        if let data = UserDefaults.standard.data(forKey: "selectedTeamCrests"),
+           let urls = try? JSONDecoder().decode([Int: String].self, from: data) {
+            selectedTeamCrests = urls
+        }
+        if let data = UserDefaults.standard.data(forKey: "selectedCompetitionEmblems"),
+           let urls = try? JSONDecoder().decode([Int: String].self, from: data) {
+            selectedCompetitionEmblems = urls
+        }
     }
 
     // MARK: - Selection Management
 
-    func addTeam(id: Int, name: String) {
+    func addTeam(id: Int, name: String, crest: String? = nil) {
         guard canAddMore, !selectedTeamIds.contains(id) else { return }
         selectedTeamIds.append(id)
         selectedTeamNames[id] = name
+        if let crest { selectedTeamCrests[id] = crest }
     }
 
     func removeTeam(id: Int) {
         selectedTeamIds.removeAll { $0 == id }
         selectedTeamNames.removeValue(forKey: id)
+        selectedTeamCrests.removeValue(forKey: id)
     }
 
-    func addCompetition(id: Int, name: String) {
+    func addCompetition(id: Int, name: String, emblem: String? = nil) {
         guard canAddMore, !selectedCompetitionIds.contains(id) else { return }
         selectedCompetitionIds.append(id)
         selectedCompetitionNames[id] = name
+        if let emblem { selectedCompetitionEmblems[id] = emblem }
     }
 
     func removeCompetition(id: Int) {
         selectedCompetitionIds.removeAll { $0 == id }
         selectedCompetitionNames.removeValue(forKey: id)
+        selectedCompetitionEmblems.removeValue(forKey: id)
     }
 
     func isTeamSelected(_ id: Int) -> Bool {
@@ -140,6 +160,8 @@ class AppState: ObservableObject {
         selectedCompetitionIds = []
         selectedTeamNames = [:]
         selectedCompetitionNames = [:]
+        selectedTeamCrests = [:]
+        selectedCompetitionEmblems = [:]
         selectedTeams = []
         hasCompletedOnboarding = false
     }

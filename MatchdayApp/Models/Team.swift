@@ -66,13 +66,13 @@ struct Player: Codable, Identifiable, Hashable {
         name ?? "\(firstName ?? "") \(lastName ?? "")"
     }
 
-    var positionCN: String {
+    var positionLabel: String {
         switch position {
-        case "Goalkeeper": return "门将"
-        case "Defence": return "后卫"
-        case "Midfield": return "中场"
-        case "Offence": return "前锋"
-        default: return position ?? "未知"
+        case "Goalkeeper": return L10n.posGoalkeeper
+        case "Defence": return L10n.posDefence
+        case "Midfield": return L10n.posMidfield
+        case "Offence": return L10n.posForward
+        default: return position ?? L10n.posUnknown
         }
     }
 

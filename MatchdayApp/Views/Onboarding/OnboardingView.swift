@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnboardingView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var localization: LocalizationManager
     @State private var currentStep: OnboardingStep = .welcome
     @State private var apiKeyInput = ""
     @State private var competitions: [Competition] = []
@@ -44,15 +45,20 @@ struct OnboardingView: View {
                 .font(.system(size: 80))
                 .foregroundStyle(.green)
 
-            Text("FCB")
+            Text("Matchday")
                 .font(.largeTitle)
                 .fontWeight(.bold)
 
-            Text("极简足球资讯")
+            Text(L10n.onboardingSlogan)
                 .font(.title3)
                 .foregroundStyle(.secondary)
 
-            Text("选择你关注的球队和赛事\n最多 10 个")
+            Text("Your matches. Your matchday.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary.opacity(0.7))
+                .italic()
+
+            Text(L10n.onboardingDescription)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -62,7 +68,7 @@ struct OnboardingView: View {
             Button {
                 currentStep = .apiKey
             } label: {
-                Text("开始设置")
+                Text(L10n.startSetup)
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -85,16 +91,16 @@ struct OnboardingView: View {
                 .font(.system(size: 50))
                 .foregroundStyle(.orange)
 
-            Text("配置 API Key")
+            Text(L10n.configureApiKey)
                 .font(.title2)
                 .fontWeight(.bold)
 
-            Text("请在 football-data.org 注册\n获取免费 API Key")
+            Text(L10n.apiKeyDescription)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            TextField("输入你的 API Key", text: $apiKeyInput)
+            TextField(L10n.enterYourApiKey, text: $apiKeyInput)
                 .textFieldStyle(.roundedBorder)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -109,7 +115,7 @@ struct OnboardingView: View {
                     }
                     currentStep = .selectCompetitions
                 } label: {
-                    Text(apiKeyInput.isEmpty ? "稍后配置" : "下一步")
+                    Text(apiKeyInput.isEmpty ? L10n.configureLater : L10n.next)
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -121,7 +127,7 @@ struct OnboardingView: View {
                 Button {
                     currentStep = .welcome
                 } label: {
-                    Text("返回")
+                    Text(L10n.back)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -136,17 +142,17 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             // Header
             VStack(spacing: 8) {
-                Text("选择赛事")
+                Text(L10n.selectCompetitions)
                     .font(.title3)
                     .fontWeight(.bold)
-                Text("已选 \(appState.totalSelections)/10")
+                Text(L10n.selectedCount(appState.totalSelections))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .padding()
 
             if isLoading {
-                LoadingView("加载赛事...")
+                LoadingView(L10n.loadingCompShort)
             } else {
                 List {
                     ForEach(competitions) { comp in
@@ -172,7 +178,7 @@ struct OnboardingView: View {
                                 }
                             } else if appState.canAddMore {
                                 Button {
-                                    appState.addCompetition(id: comp.id, name: comp.name)
+                                    appState.addCompetition(id: comp.id, name: comp.name, emblem: comp.emblem)
                                 } label: {
                                     Image(systemName: "circle")
                                         .foregroundStyle(.gray)
@@ -195,7 +201,7 @@ struct OnboardingView: View {
                 Button {
                     currentStep = .selectTeams
                 } label: {
-                    Text("选择球队")
+                    Text(L10n.selectTeams)
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -208,7 +214,7 @@ struct OnboardingView: View {
                     Button {
                         appState.completeOnboarding()
                     } label: {
-                        Text("完成设置 (\(appState.totalSelections) 个已选)")
+                        Text(L10n.finishSetup(appState.totalSelections))
                             .font(.subheadline)
                             .foregroundStyle(.green)
                     }
@@ -229,10 +235,10 @@ struct OnboardingView: View {
     private var selectTeamsStep: some View {
         VStack(spacing: 0) {
             VStack(spacing: 8) {
-                Text("选择球队")
+                Text(L10n.selectTeams)
                     .font(.title3)
                     .fontWeight(.bold)
-                Text("已选 \(appState.totalSelections)/10")
+                Text(L10n.selectedCount(appState.totalSelections))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -240,7 +246,7 @@ struct OnboardingView: View {
 
             if selectedCompForTeams == nil {
                 // Pick a competition first
-                Text("选择一个赛事来浏览球队")
+                Text(L10n.selectCompToBrowseTeams)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 8)
@@ -274,7 +280,7 @@ struct OnboardingView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "chevron.left")
-                            Text("返回赛事列表")
+                            Text(L10n.backToCompetitions)
                         }
                         .font(.subheadline)
                     }
@@ -283,7 +289,7 @@ struct OnboardingView: View {
                 .padding(.horizontal)
 
                 if isLoading {
-                    LoadingView("加载球队...")
+                    LoadingView(L10n.loadingTeamsShort)
                 } else {
                     List {
                         ForEach(teams) { team in
@@ -309,7 +315,7 @@ struct OnboardingView: View {
                                     }
                                 } else if appState.canAddMore {
                                     Button {
-                                        appState.addTeam(id: team.id, name: team.shortName ?? team.name)
+                                        appState.addTeam(id: team.id, name: team.shortName ?? team.name, crest: team.crest)
                                     } label: {
                                         Image(systemName: "circle")
                                             .foregroundStyle(.gray)
@@ -334,7 +340,7 @@ struct OnboardingView: View {
                     Button {
                         appState.completeOnboarding()
                     } label: {
-                        Text("完成设置 (\(appState.totalSelections) 个已选)")
+                        Text(L10n.finishSetup(appState.totalSelections))
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding()
@@ -347,7 +353,7 @@ struct OnboardingView: View {
                 Button {
                     currentStep = .selectCompetitions
                 } label: {
-                    Text("返回选赛事")
+                    Text(L10n.backToSelectComp)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

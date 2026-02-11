@@ -46,15 +46,15 @@ struct Match: Codable, Identifiable {
 
     var statusText: String {
         switch status {
-        case "FINISHED": return "完场"
-        case "IN_PLAY": return "进行中"
-        case "PAUSED": return "中场"
-        case "EXTRA_TIME": return "加时"
-        case "PENALTY_SHOOTOUT": return "点球"
-        case "SCHEDULED", "TIMED": return "未开始"
-        case "POSTPONED": return "延期"
-        case "CANCELLED": return "取消"
-        case "SUSPENDED": return "暂停"
+        case "FINISHED": return L10n.matchFinished
+        case "IN_PLAY": return L10n.matchInPlay
+        case "PAUSED": return L10n.matchPaused
+        case "EXTRA_TIME": return L10n.matchExtraTime
+        case "PENALTY_SHOOTOUT": return L10n.matchPenaltyShootout
+        case "SCHEDULED", "TIMED": return L10n.matchScheduled
+        case "POSTPONED": return L10n.matchPostponed
+        case "CANCELLED": return L10n.matchCancelled
+        case "SUSPENDED": return L10n.matchSuspended
         default: return status
         }
     }
@@ -80,8 +80,8 @@ struct Match: Codable, Identifiable {
     var dateText: String {
         guard let date = date else { return "" }
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "MM月dd日 EEEE"
+        formatter.locale = Locale(identifier: L10n.dateLocaleId)
+        formatter.dateFormat = L10n.dateFormat
         return formatter.string(from: date)
     }
 }
