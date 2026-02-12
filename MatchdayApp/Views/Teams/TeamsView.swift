@@ -1,44 +1,82 @@
 import SwiftUI
 
+// MARK: - Tab 3: Teams
+
 struct TeamsView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var localization: LocalizationManager
+    @State private var selectedTeamId: Int? = nil  // nil = show first team
+    @State private var selectedSegment: TeamSegment = .squad
+
+    enum TeamSegment: String, CaseIterable {
+        case squad, stats, info
+
+        var title: String {
+            switch self {
+            case .squad: return L10n.segSquad
+            case .stats: return L10n.segStats
+            case .info: return L10n.segInfo
+            }
+        }
+    }
+
+    private var teamIconItems: [IconItem] {
+        appState.selectedTeamIds.map { id in
+            IconItem(
+                id: id,
+                name: appState.selectedTeamNames[id] ?? L10n.teams,
+                shortName: appState.selectedTeamNames[id]?.components(separatedBy: " ").first ?? "",
+                imageURL: appState.selectedTeamCrests[id]
+            )
+        }
+    }
+
+    /// The currently active team ID (first selected if none tapped)
+    private var activeTeamId: Int? {
+        if let id = selectedTeamId { return id }
+        return appState.selectedTeamIds.first
+    }
 
     var body: some View {
         NavigationStack {
-            if appState.selectedTeamIds.isEmpty {
-                EmptyStateView(
-                    icon: "person.3",
-                    title: L10n.noTeamsSelected,
-                    message: L10n.noTeamsMessage
-                )
-                .navigationTitle(L10n.teams)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        settingsButton
-                    }
-                }
-            } else {
-                List {
-                    ForEach(appState.selectedTeamIds, id: \.self) { teamId in
-                        let name = appState.selectedTeamNames[teamId] ?? L10n.teams
-                        let crest = appState.selectedTeamCrests[teamId]
-                        NavigationLink(destination: TeamDetailView(teamId: teamId)) {
-                            HStack(spacing: 12) {
-                                CrestImage(crest, size: 30)
-                                Text(name)
-                                    .font(.headline)
-                            }
-                            .padding(.vertical, 4)
+            VStack(spacing: 0) {
+                if appState.selectedTeamIds.isEmpty {
+                    EmptyStateView(
+                        icon: "person.3",
+                        title: L10n.noTeamsSelected,
+                        message: L10n.noTeamsMessage
+                    )
+                } else {
+                    // 1) Team crest scroll bar (no "All" button)
+                    IconScrollBar(items: teamIconItems, selectedId: $selectedTeamId, showAllButton: false)
+
+                    // 2) Segment tab bar
+                    SegmentTabBar(
+                        tabs: TeamSegment.allCases.map { ($0, $0.title) },
+                        selected: $selectedSegment
+                    )
+
+                    // 3) Content for selected segment
+                    if let teamId = activeTeamId {
+                        switch selectedSegment {
+                        case .squad:
+                            TeamSquadContent(teamId: teamId)
+                                .id(teamId)
+                        case .stats:
+                            TeamStatsContent(teamId: teamId)
+                                .id(teamId)
+                        case .info:
+                            TeamInfoContent(teamId: teamId)
+                                .id(teamId)
                         }
                     }
                 }
-                .listStyle(.plain)
-                .navigationTitle(L10n.teams)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        settingsButton
-                    }
+            }
+            .navigationTitle(L10n.teams)
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    settingsButton
                 }
             }
         }
@@ -51,31 +89,89 @@ struct TeamsView: View {
     }
 }
 
-// MARK: - Team Detail View
+// MARK: - Team Matches Tab
 
-struct TeamDetailView: View {
+struct TeamMatchesTab: View {
     let teamId: Int
-    @State private var team: Team?
+    @State private var matches: [Match] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
-    @State private var selectedTab: TeamTab = .overview
 
-    enum TeamTab: String, CaseIterable {
-        case overview = "overview"
-        case squad = "squad"
-        case matches = "matches"
-
-        var title: String {
-            switch self {
-            case .overview: return L10n.overview
-            case .squad: return L10n.squad
-            case .matches: return L10n.schedule
+    var body: some View {
+        Group {
+            if isLoading {
+                LoadingView(L10n.loadingMatches)
+            } else if let error = errorMessage {
+                ErrorView(message: error) {
+                    Task { await loadMatches() }
+                }
+            } else if matches.isEmpty {
+                EmptyStateView(icon: "calendar", title: L10n.noSchedule, message: L10n.noMatchesScheduled)
+            } else {
+                matchList
+            }
+        }
+        .task {
+            if matches.isEmpty {
+                await loadMatches()
             }
         }
     }
 
+    private var groupedMatches: [(String, [Match])] {
+        let grouped = Dictionary(grouping: matches) { $0.dateText }
+        return grouped.sorted { a, b in
+            let dateA = matches.first { $0.dateText == a.key }?.date ?? .distantPast
+            let dateB = matches.first { $0.dateText == b.key }?.date ?? .distantPast
+            return dateA < dateB
+        }
+    }
+
+    private var matchList: some View {
+        List {
+            ForEach(groupedMatches, id: \.0) { dateString, dayMatches in
+                Section {
+                    ForEach(dayMatches) { match in
+                        MatchRow(match: match)
+                    }
+                } header: {
+                    Text(dateString)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+        .listStyle(.plain)
+    }
+
+    private func loadMatches() async {
+        isLoading = true
+        errorMessage = nil
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let today = Date()
+        let from = formatter.string(from: Calendar.current.date(byAdding: .day, value: -30, to: today)!)
+        let to = formatter.string(from: Calendar.current.date(byAdding: .day, value: 60, to: today)!)
+        do {
+            let response = try await APIService.shared.fetchTeamMatches(teamId: teamId, dateFrom: from, dateTo: to)
+            matches = response.matches
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+}
+
+// MARK: - Team Squad Content
+
+struct TeamSquadContent: View {
+    let teamId: Int
+    @State private var team: Team?
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
     var body: some View {
-        VStack(spacing: 0) {
+        Group {
             if isLoading {
                 LoadingView(L10n.loadingTeam)
             } else if let error = errorMessage {
@@ -83,53 +179,14 @@ struct TeamDetailView: View {
                     Task { await loadTeam() }
                 }
             } else if let team = team {
-                // Team header
-                teamHeader(team)
-
-                // Tab selector
-                Picker(L10n.options, selection: $selectedTab) {
-                    ForEach(TeamTab.allCases, id: \.self) { tab in
-                        Text(tab.title).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-
-                // Tab content
-                switch selectedTab {
-                case .overview:
-                    TeamOverviewTab(team: team)
-                case .squad:
-                    TeamSquadTab(team: team)
-                case .matches:
-                    TeamMatchesTab(teamId: teamId)
-                }
+                TeamSquadTab(team: team)
+            } else {
+                EmptyStateView(icon: "person.3", title: L10n.noData, message: "")
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
         .task {
-            if team == nil {
-                await loadTeam()
-            }
+            if team == nil { await loadTeam() }
         }
-    }
-
-    private func teamHeader(_ team: Team) -> some View {
-        VStack(spacing: 8) {
-            CrestImage(team.crest, size: 60)
-            Text(team.name)
-                .font(.title3)
-                .fontWeight(.bold)
-            if let venue = team.venue {
-                Text(venue)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity)
-        .background(Color(.systemGroupedBackground))
     }
 
     private func loadTeam() async {
@@ -144,7 +201,131 @@ struct TeamDetailView: View {
     }
 }
 
-// MARK: - Overview Tab
+// MARK: - Team Stats Content
+
+struct TeamStatsContent: View {
+    let teamId: Int
+    @State private var team: Team?
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if isLoading {
+                LoadingView(L10n.loadingTeam)
+            } else if let error = errorMessage {
+                ErrorView(message: error) {
+                    Task { await loadTeam() }
+                }
+            } else if let team = team {
+                teamStatsView(team)
+            } else {
+                EmptyStateView(icon: "chart.bar", title: L10n.noData, message: "")
+            }
+        }
+        .task {
+            if team == nil { await loadTeam() }
+        }
+    }
+
+    private func teamStatsView(_ team: Team) -> some View {
+        List {
+            if let squad = team.squad, !squad.isEmpty {
+                // Quick summary stats
+                Section(L10n.segStats) {
+                    InfoRow(label: L10n.segSquad, value: "\(squad.count)")
+
+                    let gkCount = squad.filter { $0.position == "Goalkeeper" }.count
+                    let defCount = squad.filter { $0.position == "Defence" }.count
+                    let midCount = squad.filter { $0.position == "Midfield" }.count
+                    let fwdCount = squad.filter { $0.position == "Offence" }.count
+
+                    InfoRow(label: L10n.posGoalkeeper, value: "\(gkCount)")
+                    InfoRow(label: L10n.posDefence, value: "\(defCount)")
+                    InfoRow(label: L10n.posMidfield, value: "\(midCount)")
+                    InfoRow(label: L10n.posForward, value: "\(fwdCount)")
+                }
+
+                // Nationality breakdown
+                let nationalities = Dictionary(grouping: squad) { $0.nationality ?? L10n.other }
+                    .mapValues { $0.count }
+                    .sorted { $0.value > $1.value }
+
+                Section(L10n.nationality) {
+                    ForEach(nationalities, id: \.key) { nationality, count in
+                        InfoRow(label: nationality, value: "\(count)")
+                    }
+                }
+            }
+
+            // Running competitions
+            if let comps = team.runningCompetitions, !comps.isEmpty {
+                Section(L10n.runningCompetitions) {
+                    ForEach(comps, id: \.id) { comp in
+                        HStack(spacing: 8) {
+                            CrestImage(comp.emblem, size: 20)
+                            Text(comp.name)
+                                .font(.subheadline)
+                        }
+                    }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    private func loadTeam() async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            team = try await APIService.shared.fetchTeam(id: teamId)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+}
+
+// MARK: - Team Info Content
+
+struct TeamInfoContent: View {
+    let teamId: Int
+    @State private var team: Team?
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if isLoading {
+                LoadingView(L10n.loadingTeam)
+            } else if let error = errorMessage {
+                ErrorView(message: error) {
+                    Task { await loadTeam() }
+                }
+            } else if let team = team {
+                TeamOverviewTab(team: team)
+            } else {
+                EmptyStateView(icon: "info.circle", title: L10n.noData, message: "")
+            }
+        }
+        .task {
+            if team == nil { await loadTeam() }
+        }
+    }
+
+    private func loadTeam() async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            team = try await APIService.shared.fetchTeam(id: teamId)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+}
+
+// MARK: - Team Overview Tab (Info section)
 
 struct TeamOverviewTab: View {
     let team: Team
@@ -164,6 +345,9 @@ struct TeamOverviewTab: View {
                 }
                 if let website = team.website {
                     InfoRow(label: L10n.website, value: website)
+                }
+                if let venue = team.venue {
+                    InfoRow(label: "Stadium", value: venue)
                 }
             }
 
@@ -305,58 +489,6 @@ struct PlayerRow: View {
         case "Offence": return .red
         default: return .gray
         }
-    }
-}
-
-// MARK: - Team Matches Tab
-
-struct TeamMatchesTab: View {
-    let teamId: Int
-    @State private var matches: [Match] = []
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-
-    var body: some View {
-        Group {
-            if isLoading {
-                LoadingView(L10n.loadingMatches)
-            } else if let error = errorMessage {
-                ErrorView(message: error) {
-                    Task { await loadMatches() }
-                }
-            } else if matches.isEmpty {
-                EmptyStateView(icon: "calendar", title: L10n.noSchedule, message: L10n.noMatchesScheduled)
-            } else {
-                List {
-                    ForEach(matches) { match in
-                        MatchRow(match: match)
-                    }
-                }
-                .listStyle(.plain)
-            }
-        }
-        .task {
-            if matches.isEmpty {
-                await loadMatches()
-            }
-        }
-    }
-
-    private func loadMatches() async {
-        isLoading = true
-        errorMessage = nil
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let today = Date()
-        let from = formatter.string(from: Calendar.current.date(byAdding: .day, value: -30, to: today)!)
-        let to = formatter.string(from: Calendar.current.date(byAdding: .day, value: 60, to: today)!)
-        do {
-            let response = try await APIService.shared.fetchTeamMatches(teamId: teamId, dateFrom: from, dateTo: to)
-            matches = response.matches
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-        isLoading = false
     }
 }
 

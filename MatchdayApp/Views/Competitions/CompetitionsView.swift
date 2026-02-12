@@ -1,86 +1,156 @@
 import SwiftUI
 
+// MARK: - Tab 2: Stats / Competitions
+
 struct CompetitionsView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var localization: LocalizationManager
+    @State private var selectedCompId: Int? = nil  // nil = show first competition
+    @State private var selectedSegment: CompSegment = .schedule
+
+    enum CompSegment: String, CaseIterable {
+        case schedule, standings, players, teams
+
+        var title: String {
+            switch self {
+            case .schedule: return L10n.segSchedule
+            case .standings: return L10n.segStandings
+            case .players: return L10n.segPlayers
+            case .teams: return L10n.segTeamsTab
+            }
+        }
+    }
+
+    private var compIconItems: [IconItem] {
+        appState.selectedCompetitionIds.map { id in
+            IconItem(
+                id: id,
+                name: appState.selectedCompetitionNames[id] ?? L10n.competitions,
+                shortName: appState.selectedCompetitionNames[id]?.components(separatedBy: " ").first ?? "",
+                imageURL: appState.selectedCompetitionEmblems[id]
+            )
+        }
+    }
+
+    /// The currently active competition ID (first selected if none tapped)
+    private var activeCompId: Int? {
+        if let id = selectedCompId { return id }
+        return appState.selectedCompetitionIds.first
+    }
 
     var body: some View {
         NavigationStack {
-            if appState.selectedCompetitionIds.isEmpty {
-                EmptyStateView(
-                    icon: "trophy",
-                    title: L10n.noCompetitionsSelected,
-                    message: L10n.noCompetitionsMessage
-                )
-                .navigationTitle(L10n.competitions)
-            } else {
-                List {
-                    ForEach(appState.selectedCompetitionIds, id: \.self) { compId in
-                        let name = appState.selectedCompetitionNames[compId] ?? L10n.competitions
-                        let emblem = appState.selectedCompetitionEmblems[compId]
-                        NavigationLink(destination: CompetitionDetailView(competitionId: compId, competitionName: name)) {
-                            HStack(spacing: 12) {
-                                CrestImage(emblem, size: 30)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(name)
-                                        .font(.headline)
-                                }
-                            }
-                            .padding(.vertical, 4)
+            VStack(spacing: 0) {
+                if appState.selectedCompetitionIds.isEmpty {
+                    EmptyStateView(
+                        icon: "trophy",
+                        title: L10n.noCompetitionsSelected,
+                        message: L10n.noCompetitionsMessage
+                    )
+                } else {
+                    // 1) Competition icon scroll bar (no "All" button)
+                    IconScrollBar(items: compIconItems, selectedId: $selectedCompId, showAllButton: false)
+
+                    // 2) Segment tab bar
+                    SegmentTabBar(
+                        tabs: CompSegment.allCases.map { ($0, $0.title) },
+                        selected: $selectedSegment
+                    )
+
+                    // 3) Content for selected segment
+                    if let compId = activeCompId {
+                        switch selectedSegment {
+                        case .schedule:
+                            CompScheduleContent(competitionId: compId)
+                        case .standings:
+                            StandingsView(competitionId: compId)
+                        case .players:
+                            CompPlayersContent(competitionId: compId)
+                        case .teams:
+                            CompTeamsContent(competitionId: compId)
                         }
                     }
                 }
-                .listStyle(.plain)
-                .navigationTitle(L10n.competitions)
             }
+            .navigationTitle(L10n.competitions)
+            .navigationBarTitleDisplayMode(.large)
         }
     }
 }
 
-// MARK: - Competition Detail View
+// MARK: - Competition Schedule Content
 
-struct CompetitionDetailView: View {
+struct CompScheduleContent: View {
     let competitionId: Int
-    let competitionName: String
+    @State private var matches: [Match] = []
+    @State private var isLoading = false
+    @State private var errorMessage: String?
 
-    @State private var selectedTab: CompTab = .standings
-
-    enum CompTab: String, CaseIterable {
-        case standings = "standings"
-        case scorers = "scorers"
-        case assists = "assists"
-
-        var title: String {
-            switch self {
-            case .standings: return L10n.standings
-            case .scorers: return L10n.topScorers
-            case .assists: return L10n.topAssists
+    var body: some View {
+        Group {
+            if isLoading {
+                LoadingView(L10n.loadingSchedule)
+            } else if let error = errorMessage {
+                ErrorView(message: error) {
+                    Task { await loadMatches() }
+                }
+            } else if matches.isEmpty {
+                EmptyStateView(icon: "calendar", title: L10n.noSchedule, message: L10n.noMatchesScheduled)
+            } else {
+                matchList
             }
+        }
+        .task {
+            if matches.isEmpty {
+                await loadMatches()
+            }
+        }
+        .id(competitionId) // Force refresh when competition changes
+    }
+
+    private var groupedMatches: [(String, [Match])] {
+        let grouped = Dictionary(grouping: matches) { $0.dateText }
+        return grouped.sorted { a, b in
+            let dateA = matches.first { $0.dateText == a.key }?.date ?? .distantPast
+            let dateB = matches.first { $0.dateText == b.key }?.date ?? .distantPast
+            return dateA < dateB
         }
     }
 
-    var body: some View {
-        VStack(spacing: 0) {
-            Picker(L10n.options, selection: $selectedTab) {
-                ForEach(CompTab.allCases, id: \.self) { tab in
-                    Text(tab.title).tag(tab)
+    private var matchList: some View {
+        List {
+            ForEach(groupedMatches, id: \.0) { dateString, dayMatches in
+                Section {
+                    ForEach(dayMatches) { match in
+                        MatchRow(match: match)
+                    }
+                } header: {
+                    Text(dateString)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
                 }
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-
-            switch selectedTab {
-            case .standings:
-                StandingsView(competitionId: competitionId)
-            case .scorers:
-                ScorersListView(competitionId: competitionId, showAssists: false)
-            case .assists:
-                ScorersListView(competitionId: competitionId, showAssists: true)
-            }
         }
-        .navigationTitle(competitionName)
-        .navigationBarTitleDisplayMode(.inline)
+        .listStyle(.plain)
+    }
+
+    private func loadMatches() async {
+        isLoading = true
+        errorMessage = nil
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let today = Date()
+        let from = formatter.string(from: Calendar.current.date(byAdding: .day, value: -14, to: today)!)
+        let to = formatter.string(from: Calendar.current.date(byAdding: .day, value: 30, to: today)!)
+        do {
+            let response = try await APIService.shared.fetchCompetitionMatches(
+                competitionId: competitionId, dateFrom: from, dateTo: to
+            )
+            matches = response.matches.sorted { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
     }
 }
 
@@ -112,6 +182,7 @@ struct StandingsView: View {
                 await loadStandings()
             }
         }
+        .id(competitionId)
     }
 
     private var currentStandings: StandingGroup? {
@@ -120,7 +191,6 @@ struct StandingsView: View {
 
     private var standingsContent: some View {
         VStack(spacing: 0) {
-            // Type selector (TOTAL/HOME/AWAY) if multiple types
             if standings.count > 1 && standings.contains(where: { $0.group == nil }) {
                 Picker(L10n.type, selection: $selectedType) {
                     Text(L10n.standingTotal).tag("TOTAL")
@@ -132,10 +202,8 @@ struct StandingsView: View {
                 .padding(.bottom, 8)
             }
 
-            // Handle group stages
             let groupStandings = standings.filter { $0.group != nil }
             if !groupStandings.isEmpty {
-                // Group stage - show each group
                 List {
                     ForEach(groupStandings) { group in
                         Section(header: Text(group.groupName)) {
@@ -247,6 +315,28 @@ struct StandingRowView: View {
         case 18...20: return .red
         default: return .primary
         }
+    }
+}
+
+// MARK: - Competition Players (Scorers + Assists)
+
+struct CompPlayersContent: View {
+    let competitionId: Int
+    @State private var showAssists = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker(L10n.type, selection: $showAssists) {
+                Text(L10n.topScorers).tag(false)
+                Text(L10n.topAssists).tag(true)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+
+            ScorersListView(competitionId: competitionId, showAssists: showAssists)
+        }
+        .id(competitionId)
     }
 }
 
@@ -390,5 +480,66 @@ struct ScorerRowView: View {
         }
         .font(.caption)
         .padding(.vertical, 2)
+    }
+}
+
+// MARK: - Competition Teams Content
+
+struct CompTeamsContent: View {
+    let competitionId: Int
+    @State private var teams: [Team] = []
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if isLoading {
+                LoadingView(L10n.loadingTeams)
+            } else if let error = errorMessage {
+                ErrorView(message: error) {
+                    Task { await loadTeams() }
+                }
+            } else if teams.isEmpty {
+                EmptyStateView(icon: "person.3", title: L10n.noData, message: "")
+            } else {
+                List {
+                    ForEach(teams) { team in
+                        HStack(spacing: 12) {
+                            CrestImage(team.crest, size: 30)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(team.name)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                if let venue = team.venue {
+                                    Text(venue)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                .listStyle(.plain)
+            }
+        }
+        .task {
+            if teams.isEmpty {
+                await loadTeams()
+            }
+        }
+        .id(competitionId)
+    }
+
+    private func loadTeams() async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            let response = try await APIService.shared.fetchCompetitionTeams(competitionId: competitionId)
+            teams = response.teams?.sorted { $0.name < $1.name } ?? []
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
     }
 }

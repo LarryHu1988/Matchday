@@ -7,11 +7,10 @@ struct ScheduleView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var selectedFilter: ScheduleFilter = .upcoming
+    @State private var selectedTeamId: Int? = nil // nil = all teams
 
     enum ScheduleFilter: String, CaseIterable {
-        case upcoming = "upcoming"
-        case results = "results"
-        case all = "all"
+        case upcoming, results, all
 
         var title: String {
             switch self {
@@ -22,19 +21,33 @@ struct ScheduleView: View {
         }
     }
 
+    // Build icon items from selected teams
+    private var teamIconItems: [IconItem] {
+        appState.selectedTeamIds.map { id in
+            IconItem(
+                id: id,
+                name: appState.selectedTeamNames[id] ?? L10n.teams,
+                shortName: appState.selectedTeamNames[id]?.components(separatedBy: " ").first ?? "",
+                imageURL: appState.selectedTeamCrests[id]
+            )
+        }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Filter picker
-                Picker(L10n.filter, selection: $selectedFilter) {
-                    ForEach(ScheduleFilter.allCases, id: \.self) { filter in
-                        Text(filter.title).tag(filter)
-                    }
+                // 1) Team crest scroll bar at top
+                if !appState.selectedTeamIds.isEmpty {
+                    IconScrollBar(items: teamIconItems, selectedId: $selectedTeamId)
                 }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
 
+                // 2) Segment tab bar: Upcoming / Results / All
+                SegmentTabBar(
+                    tabs: ScheduleFilter.allCases.map { ($0, $0.title) },
+                    selected: $selectedFilter
+                )
+
+                // 3) Match list content
                 if isLoading {
                     LoadingView(L10n.loadingSchedule)
                 } else if let error = errorMessage {
@@ -52,6 +65,7 @@ struct ScheduleView: View {
                 }
             }
             .navigationTitle(L10n.schedule)
+            .navigationBarTitleDisplayMode(.large)
             .refreshable {
                 await loadMatches()
             }
@@ -60,18 +74,29 @@ struct ScheduleView: View {
                     await loadMatches()
                 }
             }
-            .onChange(of: selectedFilter) { _, _ in }
         }
     }
 
+    // MARK: - Filtered & Grouped Matches
+
     private var filteredMatches: [Match] {
+        var result = matches
+
+        // Filter by selected team if any
+        if let teamId = selectedTeamId {
+            result = result.filter { match in
+                match.homeTeam.id == teamId || match.awayTeam.id == teamId
+            }
+        }
+
+        // Filter by schedule type
         switch selectedFilter {
         case .upcoming:
-            return matches.filter { $0.isScheduled || $0.isLive }
+            return result.filter { $0.isScheduled || $0.isLive }
         case .results:
-            return matches.filter { $0.isFinished }.reversed()
+            return result.filter { $0.isFinished }.reversed()
         case .all:
-            return matches
+            return result
         }
     }
 
@@ -103,6 +128,8 @@ struct ScheduleView: View {
         .listStyle(.plain)
     }
 
+    // MARK: - Data Loading
+
     private func loadMatches() async {
         isLoading = true
         errorMessage = nil
@@ -114,7 +141,6 @@ struct ScheduleView: View {
         do {
             var allMatches: [Match] = []
 
-            // Load matches for selected teams
             for teamId in appState.selectedTeamIds {
                 let from = formatter.string(from: Calendar.current.date(byAdding: .day, value: -30, to: today)!)
                 let to = formatter.string(from: Calendar.current.date(byAdding: .day, value: 60, to: today)!)
@@ -124,7 +150,6 @@ struct ScheduleView: View {
                 allMatches.append(contentsOf: response.matches)
             }
 
-            // Load matches for selected competitions
             for compId in appState.selectedCompetitionIds {
                 let from = formatter.string(from: Calendar.current.date(byAdding: .day, value: -14, to: today)!)
                 let to = formatter.string(from: Calendar.current.date(byAdding: .day, value: 30, to: today)!)
@@ -134,7 +159,6 @@ struct ScheduleView: View {
                 allMatches.append(contentsOf: response.matches)
             }
 
-            // Deduplicate by match ID and sort by date
             let unique = Dictionary(grouping: allMatches, by: \.id)
                 .compactMap { $0.value.first }
                 .sorted { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }

@@ -159,6 +159,17 @@ enum L10n {
     static var loadingCompShort: String { isCN ? "加载赛事..." : "Loading..." }
     static var loadingTeamsShort: String { isCN ? "加载球队..." : "Loading..." }
 
+    // MARK: - Segment Tabs (Redesigned UI)
+    static var segSchedule: String { isCN ? "赛程" : "Schedule" }
+    static var segStandings: String { isCN ? "积分" : "Standings" }
+    static var segPlayers: String { isCN ? "球员" : "Players" }
+    static var segTeamsTab: String { isCN ? "球队" : "Teams" }
+    static var segSquad: String { isCN ? "阵容" : "Squad" }
+    static var segStats: String { isCN ? "数据" : "Stats" }
+    static var segInfo: String { isCN ? "资料" : "Info" }
+    static var allTeams: String { isCN ? "全部" : "All" }
+    static var allCompetitions: String { isCN ? "全部" : "All" }
+
     // MARK: - API Errors
     static var errorInvalidResponse: String { isCN ? "无效的服务器响应" : "Invalid server response" }
     static var errorRateLimited: String { isCN ? "请求过于频繁，请稍后再试" : "Too many requests, try again later" }
